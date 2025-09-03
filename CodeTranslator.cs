@@ -25,9 +25,35 @@ namespace CodeTranslator.Ollama
         static async Task<int> Main(string[] args)
         {
             var options = ParseArgs(args);
+
+            // Determine logPath before first log
+            string logPath = options.ContainsKey("log")
+                ? options["log"]
+                : Path.Combine(
+                    options.ContainsKey("directory") && !string.IsNullOrWhiteSpace(options["directory"])
+                        ? options["directory"] : ".",
+                    "translation_dispatch.log");
+
+            // Log full raw command line (optional)
+            Log(logPath, "Full command line: " + string.Join(" ", args), verbose: false);
+
+            // Build pretty options text for log/console
+            string optionsText = "Command line options:\n" +
+                string.Join("\n", options.Select(kvp => $"  --{kvp.Key}={kvp.Value}"));
+
+            // Always log options to file
+            Log(logPath, optionsText, verbose: false);
+
+            // Print to console if verbose
+            bool verbose = options.ContainsKey("verbose");
+            if (verbose)
+            {
+                Info(optionsText);
+            }
+
             if (!options.ContainsKey("directory") || string.IsNullOrWhiteSpace(options["directory"]))
             {
-                Console.WriteLine("Usage: CodeTranslator --directory <input-dir> [--source <lang>] [--target <lang>] [--model <name>] [--api-url <url>] [--output <dir>] [--log <file>] [--overwrite] [--dry-run] [--verbose]");
+                Console.WriteLine("Usage: CodeTranslator --directory <input-dir> [--source <lang>] [--target <lang>] [--model <name>] [--api-url <url>] [--output <dir>] [--log <file>] [--prompt <file>] [--overwrite] [--dry-run] [--verbose]");
                 return 1;
             }
 
@@ -37,10 +63,10 @@ namespace CodeTranslator.Ollama
             string model = options.ContainsKey("model") ? options["model"] : "qwen2.5-coder:3b";
             string apiUrl = options.ContainsKey("api-url") ? options["api-url"] : "http://localhost:11434/api/generate";
             string outputDir = options.ContainsKey("output") ? options["output"] : Path.Combine(directory, $"converted_{targetLang}");
-            string logPath = options.ContainsKey("log") ? options["log"] : Path.Combine(directory, "translation_dispatch.log");
+            string promptOption = options.ContainsKey("prompt") ? options["prompt"] : null;
             bool overwrite = options.ContainsKey("overwrite");
             bool dryRun = options.ContainsKey("dry-run");
-            bool verbose = options.ContainsKey("verbose");
+            // `verbose` already set above
 
             if (!Directory.Exists(directory))
             {
@@ -50,23 +76,26 @@ namespace CodeTranslator.Ollama
 
             Directory.CreateDirectory(outputDir);
 
-            // Pick prompt file if exists
-            string promptFile = null;
-            string promptContent = null;
-            string[] promptCandidates =
+            // --- PROMPT FILE PICKUP, CENTRALIZED ---
+            string? promptFile = null;
+            string? promptContent = null;
+            try
             {
-                $"{sourceLang}-to-{targetLang}.prompt",
-                $"{targetLang}.prompt",
-                $"{sourceLang}.prompt"
-            };
-            foreach (var f in promptCandidates)
-            {
-                if (File.Exists(f)) { promptFile = f; break; }
+                promptFile = ResolvePromptFile(directory, promptOption, sourceLang, targetLang);
+                if (promptFile != null)
+                {
+                    promptContent = await File.ReadAllTextAsync(promptFile, Encoding.UTF8);
+                    if (verbose) Info($"Using prompt file: {promptFile}");
+                }
+                else
+                {
+                    if (verbose) Info("No prompt file found or specified.");
+                }
             }
-            if (promptFile != null)
+            catch (FileNotFoundException ex)
             {
-                promptContent = await File.ReadAllTextAsync(promptFile, Encoding.UTF8);
-                if (verbose) Info($"Using prompt file: {promptFile}");
+                Error(ex.Message);
+                return 2;
             }
 
             // Collect files
@@ -135,6 +164,35 @@ namespace CodeTranslator.Ollama
 
             Info("All files processed.");
             return 0;
+        }
+
+        /// <summary>
+        /// Resolve the prompt file, handling user input and fallback logic.
+        /// Returns the path to use, or null if not found and not specified.
+        /// Throws FileNotFoundException if user specified file is missing.
+        /// </summary>
+        static string? ResolvePromptFile(string directory, string? promptOption, string sourceLang, string targetLang)
+        {
+            if (!string.IsNullOrEmpty(promptOption))
+            {
+                // Use user-specified prompt file, make relative to directory if not rooted
+                var promptFile = Path.IsPathRooted(promptOption)
+                    ? promptOption
+                    : Path.Combine(directory, promptOption);
+
+                if (!File.Exists(promptFile))
+                    throw new FileNotFoundException($"Specified prompt file '{promptFile}' does not exist.");
+                return promptFile;
+            }
+
+            // Auto-pick from candidates in directory
+            string[] promptCandidates =
+            {
+                Path.Combine(directory, $"{sourceLang}-to-{targetLang}.prompt"),
+                Path.Combine(directory, $"{targetLang}.prompt"),
+                Path.Combine(directory, $"{sourceLang}.prompt")
+            };
+            return promptCandidates.FirstOrDefault(File.Exists);
         }
 
         static string BuildPrompt(string code, string src, string tgt) =>
