@@ -137,11 +137,9 @@ namespace CodeTranslator.Ollama
                     continue;
                 }
 
-                string prompt = promptContent != null
-                    ? promptContent.Replace("{sourceLang}", sourceLang)
+                string prompt = promptContent.Replace("{sourceLang}", sourceLang)
                                    .Replace("{targetLang}", targetLang)
-                                   .Replace("{code}", code)
-                    : BuildPrompt(code, sourceLang, targetLang);
+                                   .Replace("{code}", code);
 
                 OllamaResponse apiResult = null;
                 try
@@ -195,21 +193,33 @@ namespace CodeTranslator.Ollama
 
             string[] promptCandidates =
             {
-                Path.Combine(directory, $"{sourceLang}-to-{targetLang}.prompt"),
-                Path.Combine(directory, $"{targetLang}.prompt"),
-                Path.Combine(directory, $"{sourceLang}.prompt")
-            };
-            return promptCandidates.FirstOrDefault(File.Exists);
-        }
+        Path.Combine(directory, $"{sourceLang}-to-{targetLang}.prompt"),
+        Path.Combine(directory, $"{targetLang}.prompt"),
+        Path.Combine(directory, $"{sourceLang}.prompt")
+    };
 
-        static string BuildPrompt(string code, string src, string tgt) =>
-$@"You are a code translation assistant.
-Convert exactly this one file from {src} to {tgt}, preserving its structure, comments and functionality.
+            foreach (var candidate in promptCandidates)
+            {
+                if (File.Exists(candidate))
+                    return candidate;
+            }
+
+            // If no prompt file is found, create a default one with the source-target.prompt convention
+            string defaultPromptFileName = $"{sourceLang}-to-{targetLang}.prompt";
+            string defaultPromptFilePath = Path.Combine(directory, defaultPromptFileName);
+            string defaultPromptContent = $@"You are a code translation assistant.
+Convert exactly this one file from {sourceLang} to {targetLang}, preserving its structure, comments and functionality.
 Show me the source code only, full source code, and nothing but the source code.
 
 --- FILE TO TRANSLATE ---
-{code}
+{{code}}
 --- END FILE ---";
+
+            File.WriteAllText(defaultPromptFilePath, defaultPromptContent, Encoding.UTF8);
+            Info($"Default prompt file created: {defaultPromptFilePath}");
+
+            return defaultPromptFilePath;
+        }
 
         static async Task<OllamaResponse> TranslateAsync(string model, string prompt, string apiUrl)
         {
