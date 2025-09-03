@@ -192,6 +192,21 @@ All translation activities are logged with timestamps:
 2024-03-15T10:30:20.000Z SENT src/utils/Helper.java -> src/utils/Helper.cs
 ```
 
+## Error Handling
+
+- **Missing directories**: Tool exits with error code 2 if input directory doesn't exist
+- **Missing prompt files**: Exits with error if user-specified prompt file is not found  
+- **Existing files**: Skipped with warning unless `--overwrite` is specified
+- **API errors**: Individual file failures are logged and processing continues
+- **Incomplete translations**: Detected by keywords like "incomplete" or "provide more details"
+- **Network timeouts**: 30-minute timeout per API request to handle large files
+- **File system errors**: Proper error handling for file I/O operations
+
+**Exit Codes:**
+- `0`: Success - all files processed
+- `1`: Invalid command line arguments
+- `2`: Missing input directory or prompt file
+
 ## License
 
 This project is licensed under the Apache 2.0 license.
