@@ -1,102 +1,197 @@
 # CodeTranslator
 
-Bulk translate source code files from one language to another using Ollama LLM API.
+A command-line tool that automatically translates source code between different programming languages using AI models via Ollama API.
+
+## Table of Contents
+
+1. [Features](#features)
+2. [Requirements](#requirements)
+3. [Installation](#installation)
+4. [Usage](#usage)
+   - [Basic Usage](#basic-usage)
+   - [Advanced Usage](#advanced-usage)
+   - [Command Line Options](#command-line-options)
+   - [Supported Languages](#supported-languages)
+5. [Custom Prompts](#custom-prompts)
+   - [Prompt Variables](#prompt-variables)
+   - [Example Prompt File](#example-prompt-file)
+6. [Examples](#examples)
+7. [Output Structure](#output-structure)
+8. [Logging](#logging)
+9. [Error Handling](#error-handling)
+10. [Contributing](#contributing)
+11. [License](#license)
+
+---
 
 ## Features
 
-- **Batch translate** all source files in a directory
-- **Configurable via command-line:** source/target language, Ollama model, API URL, output folder, logging, and more
-- **Automatic language detection** for file extensions
-- **Custom prompt** support: use a `.prompt` file in your project dir with `{src}`, `{tgt}`, `{code}` tokens
-- **Skip or overwrite** existing output files
-- **Dry run** mode for previewing actions
-- **Verbose** mode for debug/monitoring
+- **Multi-language Support**: Translate between 40+ programming languages
+- **Batch Processing**: Convert entire directories at once
+- **Custom Prompts**: Fine-tune translation behavior with custom prompt files
+- **Flexible Output**: Custom output directories and file organization
+- **Detailed Logging**: Track translation progress
+- **Safety Features**: Overwrite protection and dry-run mode
+- **AI Integration**: Works with any Ollama-compatible model
 
 ## Requirements
 
-- [.NET 6+ SDK](https://dotnet.microsoft.com/download)
-- [Ollama](https://ollama.com/) running locally, with your chosen model pulled (default: `qwen2.5-coder:3b`)
+- .NET 6.0 or later
+- [Ollama](https://ollama.ai/) running locally or access to an Ollama-compatible API endpoint
+- An AI model capable of code translation (default: `qwen2.5-coder:3b`)
 
 ## Installation
 
+1. Clone the repository:
 ```bash
-# Optional: add System.CommandLine if using .NET 6
-dotnet add package System.CommandLine --prerelease
+git clone https://github.com/yourusername/CodeTranslator.git
+cd CodeTranslator
+```
+
+2. Build the project:
+```bash
+dotnet build -c Release
+```
+
+3. (Optional) Create a global tool:
+```bash
+dotnet pack -c Release
+dotnet tool install --global --add-source ./bin/Release CodeTranslator
 ```
 
 ## Usage
 
 ### Basic Usage
+
 ```bash
-dotnet run --project CodeTranslator --directory ./MyProject
+CodeTranslator --directory /path/to/source/code
 ```
 
-### Full Options
+This will translate all Java files to C# by default.
+
+### Advanced Usage
+
 ```bash
-dotnet run --project CodeTranslator --directory <input-dir>
-    [--source <SourceLang>]
-    [--target <TargetLang>]
-    [--model <OllamaModel>]
-    [--api-url <APIEndpoint>]
-    [--output <OutputDir>]
-    [--log <LogFile>]
-    [--overwrite]
-    [--dry-run]
-    [--verbose]
+CodeTranslator --directory ./my-project \
+               --source Java \
+               --target Python \
+               --model llama2:13b \
+               --output ./converted \
+               --log ./translation.log \
+               --verbose
 ```
 
-### Examples
+### Command Line Options
 
-**Translate all Java files to C# in ./MyProject:**
-```bash
-dotnet run --project CodeTranslator --directory ./MyProject
+| Option | Description | Default |
+|--------|-------------|---------|
+| `--directory` | **Required.** Input directory containing source files | - |
+| `--source` | Source programming language | `Java` |
+| `--target` | Target programming language | `CSharp` |
+| `--model` | Ollama model name | `qwen2.5-coder:3b` |
+| `--api-url` | Ollama API endpoint | `http://localhost:11434/api/generate` |
+| `--output` | Output directory | `{input-dir}/converted_{target}` |
+| `--log` | Log file path | `{input-dir}/translation_dispatch.log` |
+| `--overwrite` | Overwrite existing output files | `false` |
+| `--dry-run` | Show what would be translated without doing it | `false` |
+| `--verbose` | Enable verbose logging output | `false` |
+
+### Supported Languages
+
+**Programming Languages:**
+C#, VB.NET, F#, Java, Kotlin, Scala, Groovy, C, C++, Objective-C, Rust, Go, JavaScript, TypeScript, Python, Ruby, PHP, Perl, Dart, Lua, CoffeeScript, R, Shell/Bash, PowerShell, Haskell, Clojure, Elixir, Erlang, Lisp, Scheme, MATLAB, Racket, Elm
+
+**Markup & Data Languages:**
+HTML, XML, CSS, JSON, YAML, Markdown, TOML, INI, CSV, SQL, GraphQL
+
+**Build Systems:**
+Dockerfile, Makefile, CMake
+
+## Custom Prompts
+
+CodeTranslator supports custom prompt files to fine-tune translation behavior. Create a prompt file with one of these naming patterns:
+
+- `{source}-to-{target}.prompt` (e.g., `Java-to-Python.prompt`)
+- `{target}.prompt` (e.g., `Python.prompt`) 
+- `{source}.prompt` (e.g., `Java.prompt`)
+
+### Prompt Variables
+
+Your prompt file can use these placeholders:
+- `{sourceLang}` - Source language name
+- `{targetLang}` - Target language name  
+- `{code}` - The source code to translate
+
+### Example Prompt File
+
 ```
+You are an expert code translator specializing in {sourceLang} to {targetLang} conversion.
 
-**Translate Python to Go using DeepSeek, with output to ./out:**
-```bash
-dotnet run --project CodeTranslator --directory ./src --source Python --target Go --model deepseek-coder:6.7b --output ./out
-```
+Convert the following {sourceLang} code to idiomatic {targetLang}, following these guidelines:
+- Preserve all functionality and logic
+- Use {targetLang} naming conventions
+- Add appropriate comments explaining complex translations
+- Ensure the code follows {targetLang} best practices
 
-**Overwrite existing output and enable verbose logging:**
-```bash
-dotnet run --project CodeTranslator --directory ./src --overwrite --verbose
-```
-
-**Just show what would be done, don't translate:**
-```bash
-dotnet run --project CodeTranslator --directory ./src --dry-run
-```
-
-## Custom Prompt
-
-Place a `.prompt` file in your input directory.
-
-You can use these tokens in the prompt, which will be auto-replaced:
-- `{src}` — Source language name
-- `{tgt}` — Target language name
-- `{code}` — File content
-
-**Example .prompt:**
-```
-Convert this {src} code to {tgt}. Preserve all comments and match code style if possible.
-
+Source code:
 {code}
+
+Provide only the translated {targetLang} code, no explanations or markdown formatting.
 ```
 
-If no `.prompt` is found, a default prompt is used.
+## Examples
 
-## Output
+### Translate Java project to C#
+```bash
+CodeTranslator --directory ./java-project --source Java --target CSharp
+```
 
-**Translated files:**
-By default in `converted_<TargetLang>` folder inside your input directory (or as set by `--output`)
+### Convert Python scripts to JavaScript with custom model
+```bash
+CodeTranslator --directory ./python-scripts \
+               --source Python \
+               --target JavaScript \
+               --model codellama:13b-instruct
+```
 
-**Log file:**
-`translation_dispatch.log` (or as set by `--log`)
+### Dry run to preview translations
+```bash
+CodeTranslator --directory ./source --dry-run --verbose
+```
 
-## Supported Languages
+### Use remote Ollama instance
+```bash
+CodeTranslator --directory ./code \
+               --api-url http://remote-server:11434/api/generate
+```
 
-All common languages supported, including:
-`Java`, `CSharp`, `Python`, `Go`, `C`, `C++`, `Kotlin`, `TypeScript`, `JavaScript`, `Ruby`, `PHP`, `Rust`, `Haskell`, `Swift`, `Scala`, and more.
-## Contributing
+## Output Structure
 
-[Add contributing guidelines here]
+CodeTranslator preserves the directory structure of your input files:
+
+```
+input-directory/
+├── src/
+│   ├── Main.java
+│   └── utils/
+│       └── Helper.java
+└── converted_CSharp/
+    └── src/
+        ├── Main.cs
+        └── utils/
+            └── Helper.cs
+```
+
+## Logging
+
+All translation activities are logged with timestamps:
+
+```
+2024-03-15T10:30:00.000Z SENT src/Main.java -> src/Main.cs
+2024-03-15T10:30:15.000Z TRANSLATED src/Main.java -> src/Main.cs
+2024-03-15T10:30:20.000Z SENT src/utils/Helper.java -> src/utils/Helper.cs
+```
+
+## License
+
+This project is licensed under the Apache 2.0 license.
