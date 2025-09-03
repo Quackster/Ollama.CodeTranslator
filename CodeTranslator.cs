@@ -65,6 +65,14 @@ namespace CodeTranslator.Ollama
             string promptOption = options.ContainsKey("prompt") ? options["prompt"] : null;
             bool overwrite = options.ContainsKey("overwrite");
             bool dryRun = options.ContainsKey("dry-run");
+            var timeout = TimeSpan.FromMinutes(30);
+
+            if (int.TryParse(options["--timeout"], out var timeoutVal) && timeoutVal > 0)
+            {
+                timeout = TimeSpan.FromSeconds(timeoutVal);
+            }
+
+            client.Timeout = timeout;
 
             if (!Directory.Exists(directory))
             {
@@ -110,8 +118,6 @@ namespace CodeTranslator.Ollama
             }
 
             Info($"Found {files.Count} '{sourceLang}' files in '{directory}'. Output: '{outputDir}'");
-
-            client.Timeout = TimeSpan.FromMinutes(30);
 
             foreach (var file in files)
             {
@@ -207,7 +213,7 @@ namespace CodeTranslator.Ollama
             // If no prompt file is found, create a default one with the source-target.prompt convention
             string defaultPromptFileName = $"{sourceLang}-to-{targetLang}.prompt";
             string defaultPromptFilePath = Path.Combine(directory, defaultPromptFileName);
-            string defaultPromptContent = $@"You are a code translation assistant.
+            string defaultPromptContent = @"You are a code translation assistant.
 Convert exactly this one file from {sourceLang} to {targetLang}, preserving its structure, comments and functionality.
 Show me the source code only, full source code, and nothing but the source code.
 
