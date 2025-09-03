@@ -25,9 +25,10 @@ namespace CodeTranslator.Ollama
 
         static async Task<int> Main(string[] args)
         {
+            ExtensionConfig.LoadOrCreateDefault();
+
             var options = ParseArgs(args);
 
-            // Determine logPath before first log
             string logPath = options.ContainsKey("log")
                 ? options["log"]
                 : Path.Combine(
@@ -35,17 +36,13 @@ namespace CodeTranslator.Ollama
                         ? options["directory"] : ".",
                     "translation_dispatch.log");
 
-            // Log full raw command line (optional)
             Log(logPath, "Full command line: " + string.Join(" ", args), verbose: false);
 
-            // Build pretty options text for log/console
             string optionsText = "Command line options:\n" +
                 string.Join("\n", options.Select(kvp => $"  --{kvp.Key}={kvp.Value}"));
 
-            // Always log options to file
             Log(logPath, optionsText, verbose: false);
 
-            // Print to console if verbose
             bool verbose = options.ContainsKey("verbose");
             if (verbose)
             {
@@ -55,6 +52,7 @@ namespace CodeTranslator.Ollama
             if (!options.ContainsKey("directory") || string.IsNullOrWhiteSpace(options["directory"]))
             {
                 Console.WriteLine("Usage: CodeTranslator --directory <input-dir> [--source <lang>] [--target <lang>] [--model <name>] [--api-url <url>] [--output <dir>] [--log <file>] [--prompt <file>] [--overwrite] [--dry-run] [--verbose]");
+                Console.WriteLine("Language file extensions are now loaded from 'extensions.json' (auto-generated in the working directory if missing). Edit this file to add your own extensions!");
                 return 1;
             }
 
@@ -67,7 +65,6 @@ namespace CodeTranslator.Ollama
             string promptOption = options.ContainsKey("prompt") ? options["prompt"] : null;
             bool overwrite = options.ContainsKey("overwrite");
             bool dryRun = options.ContainsKey("dry-run");
-            // `verbose` already set above
 
             if (!Directory.Exists(directory))
             {
@@ -77,7 +74,7 @@ namespace CodeTranslator.Ollama
 
             Directory.CreateDirectory(outputDir);
 
-            // --- PROMPT FILE PICKUP, CENTRALIZED ---
+            // PROMPT FILE PICKUP, CENTRALIZED
             string? promptFile = null;
             string? promptContent = null;
             try
@@ -99,9 +96,9 @@ namespace CodeTranslator.Ollama
                 return 2;
             }
 
-            // Collect files
-            var sourceFileExtensions = GetSourceExtensions(sourceLang).ToList();
-            var targetFileExtensions = GetSourceExtensions(targetLang).ToList();
+            // Load extensions from config
+            var sourceFileExtensions = ExtensionConfig.GetExtensions(sourceLang);
+            var targetFileExtensions = ExtensionConfig.GetExtensions(targetLang);
             var files = sourceFileExtensions.SelectMany(ext => Directory.GetFiles(directory, $"*{ext}", SearchOption.AllDirectories)).Distinct().ToList();
 
             string ext = targetFileExtensions.First();
@@ -118,7 +115,6 @@ namespace CodeTranslator.Ollama
 
             foreach (var file in files)
             {
-
                 string relativePath = Path.GetRelativePath(directory, file);
                 string code = await File.ReadAllTextAsync(file);
                 string outFile = Path.Combine(outputDir, Path.ChangeExtension(relativePath, ext));
@@ -132,7 +128,6 @@ namespace CodeTranslator.Ollama
                     continue;
                 }
 
-                // LOG SENT
                 Log(logPath, $"{DateTime.UtcNow:o} SENT {relativePath} -> {Path.GetRelativePath(directory, outFile)}", verbose);
                 Info($"[SENT] {relativePath} → {Path.GetRelativePath(directory, outFile)}");
 
@@ -159,7 +154,6 @@ namespace CodeTranslator.Ollama
                     continue;
                 }
 
-                // LOG TRANSLATE
                 Log(logPath, $"{DateTime.UtcNow:o} TRANSLATED {relativePath} -> {Path.GetRelativePath(directory, outFile)}", verbose);
 
                 if (apiResult.Response.Contains("incomplete", StringComparison.OrdinalIgnoreCase)
@@ -184,19 +178,12 @@ namespace CodeTranslator.Ollama
                 return MarkdownCodeExtractor.ExtractShortCodeSnippet(response);
             }
             catch { return response; }
-
         }
 
-        /// <summary>
-        /// Resolve the prompt file, handling user input and fallback logic.
-        /// Returns the path to use, or null if not found and not specified.
-        /// Throws FileNotFoundException if user specified file is missing.
-        /// </summary>
         static string? ResolvePromptFile(string directory, string? promptOption, string sourceLang, string targetLang)
         {
             if (!string.IsNullOrEmpty(promptOption))
             {
-                // Use user-specified prompt file, make relative to directory if not rooted
                 var promptFile = Path.IsPathRooted(promptOption)
                     ? promptOption
                     : Path.Combine(directory, promptOption);
@@ -206,7 +193,6 @@ namespace CodeTranslator.Ollama
                 return promptFile;
             }
 
-            // Auto-pick from candidates in directory
             string[] promptCandidates =
             {
                 Path.Combine(directory, $"{sourceLang}-to-{targetLang}.prompt"),
@@ -274,7 +260,6 @@ Show me the source code only, full source code, and nothing but the source code.
                 if (args[i].StartsWith("--"))
                 {
                     string key = args[i].Substring(2);
-                    // boolean switch args
                     if (key == "overwrite" || key == "dry-run" || key == "verbose")
                         dict[key] = "true";
                     else if (i + 1 < args.Length && !args[i + 1].StartsWith("--"))
@@ -285,80 +270,122 @@ Show me the source code only, full source code, and nothing but the source code.
             }
             return dict;
         }
+    }
 
-        static IEnumerable<string> GetSourceExtensions(string lang) => lang.ToLower() switch
+    // ExtensionConfig: Reads/creates extensions.json for language-extension mapping
+    public static class ExtensionConfig
+    {
+        private const string ConfigFileName = "extensions.json";
+        private static Dictionary<string, List<string>> _map = null;
+
+        public static IReadOnlyDictionary<string, List<string>> Map => _map;
+
+        public static void LoadOrCreateDefault()
         {
-            "csharp" or "c#" => new[] { ".cs" },
-            "vbnet" or "vb" => new[] { ".vb" },
-            "fsharp" or "fs" or "f#" => new[] { ".fs" },
-            "java" => new[] { ".java" },
-            "kotlin" => new[] { ".kt" },
-            "scala" => new[] { ".scala" },
-            "groovy" => new[] { ".groovy" },
-            "c" => new[] { ".c" },
-            "cpp" or "c++" => new[] { ".cpp", ".cc", ".cxx" },
-            "objc" or "objective-c" => new[] { ".m", ".mm" },
-            "rust" => new[] { ".rs" },
-            "go" => new[] { ".go" },
-            "javascript" or "js" => new[] { ".js", ".mjs", ".cjs" },
-            "typescript" or "ts" => new[] { ".ts", ".tsx" },
-            "python" or "py" => new[] { ".py", ".pyw" },
-            "ruby" or "rb" => new[] { ".rb", ".erb" },
-            "php" => new[] { ".php", ".phtml" },
-            "perl" or "pl" => new[] { ".pl", ".pm" },
-            "dart" => new[] { ".dart" },
-            "lua" => new[] { ".lua" },
-            "coffeescript" or "coffee" => new[] { ".coffee" },
-            "r" => new[] { ".r", ".R" },
-            "shell" or "bash" => new[] { ".sh" },
-            "powershell" => new[] { ".ps1", ".psm1" },
-            "haskell" or "hs" => new[] { ".hs", ".lhs" },
-            "clojure" or "clj" => new[] { ".clj", ".cljs", ".cljc" },
-            "elixir" or "ex" => new[] { ".ex", ".exs" },
-            "erlang" or "erl" => new[] { ".erl", ".hrl" },
-            "lisp" => new[] { ".lisp", ".lsp" },
-            "scheme" => new[] { ".scm", ".ss" },
-            "html" => new[] { ".html", ".htm" },
-            "xml" => new[] { ".xml", ".xsl", ".xsd" },
-            "css" => new[] { ".css" },
-            "json" => new[] { ".json" },
-            "yaml" or "yml" => new[] { ".yaml", ".yml" },
-            "markdown" or "md" => new[] { ".md", ".markdown" },
-            "toml" => new[] { ".toml" },
-            "ini" => new[] { ".ini" },
-            "csv" => new[] { ".csv" },
-            "sql" => new[] { ".sql" },
-            "matlab" or "m" => new[] { ".m", ".mlx" },
-            "racket" => new[] { ".rkt" },
-            "elm" => new[] { ".elm" },
-            "graphql" => new[] { ".graphql", ".gql" },
-            "dockerfile" => new[] { "Dockerfile" },
-            "makefile" => new[] { "Makefile" },
-            "cmake" => new[] { "CMakeLists.txt" },
-            "lingo" or "shockwave" => new[] { ".ls" },
-            _ => new[] { ".txt" }
+            if (!File.Exists(ConfigFileName))
+            {
+                var defaultMap = GetDefaultMap();
+                File.WriteAllText(ConfigFileName, JsonSerializer.Serialize(defaultMap, new JsonSerializerOptions { WriteIndented = true }));
+            }
+            var json = File.ReadAllText(ConfigFileName);
+            _map = JsonSerializer.Deserialize<Dictionary<string, List<string>>>(json, new JsonSerializerOptions { PropertyNameCaseInsensitive = true })
+                   ?? new Dictionary<string, List<string>>();
+        }
+
+        public static List<string> GetExtensions(string lang)
+        {
+            lang = lang?.Trim()?.ToLower() ?? "";
+            return _map.TryGetValue(lang, out var exts) ? exts : new List<string> { ".txt" };
+        }
+
+        // These are your hardcoded defaults
+        private static Dictionary<string, List<string>> GetDefaultMap() => new()
+        {
+            ["csharp"] = new() { ".cs" },
+            ["c#"] = new() { ".cs" },
+            ["vbnet"] = new() { ".vb" },
+            ["vb"] = new() { ".vb" },
+            ["fsharp"] = new() { ".fs" },
+            ["fs"] = new() { ".fs" },
+            ["f#"] = new() { ".fs" },
+            ["java"] = new() { ".java" },
+            ["kotlin"] = new() { ".kt" },
+            ["scala"] = new() { ".scala" },
+            ["groovy"] = new() { ".groovy" },
+            ["c"] = new() { ".c" },
+            ["cpp"] = new() { ".cpp", ".cc", ".cxx" },
+            ["c++"] = new() { ".cpp", ".cc", ".cxx" },
+            ["objc"] = new() { ".m", ".mm" },
+            ["objective-c"] = new() { ".m", ".mm" },
+            ["rust"] = new() { ".rs" },
+            ["go"] = new() { ".go" },
+            ["javascript"] = new() { ".js", ".mjs", ".cjs" },
+            ["js"] = new() { ".js", ".mjs", ".cjs" },
+            ["typescript"] = new() { ".ts", ".tsx" },
+            ["ts"] = new() { ".ts", ".tsx" },
+            ["python"] = new() { ".py", ".pyw" },
+            ["py"] = new() { ".py", ".pyw" },
+            ["ruby"] = new() { ".rb", ".erb" },
+            ["rb"] = new() { ".rb", ".erb" },
+            ["php"] = new() { ".php", ".phtml" },
+            ["perl"] = new() { ".pl", ".pm" },
+            ["pl"] = new() { ".pl", ".pm" },
+            ["dart"] = new() { ".dart" },
+            ["lua"] = new() { ".lua" },
+            ["coffeescript"] = new() { ".coffee" },
+            ["coffee"] = new() { ".coffee" },
+            ["r"] = new() { ".r", ".R" },
+            ["shell"] = new() { ".sh" },
+            ["bash"] = new() { ".sh" },
+            ["powershell"] = new() { ".ps1", ".psm1" },
+            ["haskell"] = new() { ".hs", ".lhs" },
+            ["hs"] = new() { ".hs", ".lhs" },
+            ["clojure"] = new() { ".clj", ".cljs", ".cljc" },
+            ["clj"] = new() { ".clj", ".cljs", ".cljc" },
+            ["elixir"] = new() { ".ex", ".exs" },
+            ["ex"] = new() { ".ex", ".exs" },
+            ["erlang"] = new() { ".erl", ".hrl" },
+            ["erl"] = new() { ".erl", ".hrl" },
+            ["lisp"] = new() { ".lisp", ".lsp" },
+            ["scheme"] = new() { ".scm", ".ss" },
+            ["html"] = new() { ".html", ".htm" },
+            ["xml"] = new() { ".xml", ".xsl", ".xsd" },
+            ["css"] = new() { ".css" },
+            ["json"] = new() { ".json" },
+            ["yaml"] = new() { ".yaml", ".yml" },
+            ["yml"] = new() { ".yaml", ".yml" },
+            ["markdown"] = new() { ".md", ".markdown" },
+            ["md"] = new() { ".md", ".markdown" },
+            ["toml"] = new() { ".toml" },
+            ["ini"] = new() { ".ini" },
+            ["csv"] = new() { ".csv" },
+            ["sql"] = new() { ".sql" },
+            ["matlab"] = new() { ".m", ".mlx" },
+            ["m"] = new() { ".m", ".mlx" },
+            ["racket"] = new() { ".rkt" },
+            ["elm"] = new() { ".elm" },
+            ["graphql"] = new() { ".graphql", ".gql" },
+            ["dockerfile"] = new() { "Dockerfile" },
+            ["makefile"] = new() { "Makefile" },
+            ["cmake"] = new() { "CMakeLists.txt" },
+            ["lingo"] = new() { ".ls" },
+            ["shockwave"] = new() { ".ls" }
         };
     }
+
     public static class MarkdownCodeExtractor
     {
         public static string ExtractShortCodeSnippet(string markdown)
         {
-            // Regex to match code fences: ```[optional language]\n(code)\n```
             var regex = new Regex(@"```[\w]*\n(.*?)\n```", RegexOptions.Singleline);
             var match = regex.Match(markdown);
 
             if (match.Success)
             {
                 string code = match.Groups[1].Value;
-                //if (code.Length < maxLength)
-                // {
-                //    return code;
-                //}
-
                 return code;
             }
             return markdown;
         }
     }
-
 }
