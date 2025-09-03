@@ -12,15 +12,19 @@ A command-line tool that automatically translates source code between different 
    - [Advanced Usage](#advanced-usage)
    - [Command Line Options](#command-line-options)
    - [Supported Languages](#supported-languages)
-5. [Custom Prompts](#custom-prompts)
+5. [File Extensions Configuration](#file-extensions-configuration)
+   - [extensions.json](#extensionsjson)
+   - [Adding Custom Extensions](#adding-custom-extensions)
+   - [Example Configuration](#example-configuration)
+6. [Custom Prompts](#custom-prompts)
    - [Prompt Variables](#prompt-variables)
    - [Example Prompt File](#example-prompt-file)
-6. [Examples](#examples)
-7. [Output Structure](#output-structure)
-8. [Logging](#logging)
-9. [Error Handling](#error-handling)
-10. [Contributing](#contributing)
-11. [License](#license)
+7. [Examples](#examples)
+8. [Output Structure](#output-structure)
+9. [Logging](#logging)
+10. [Error Handling](#error-handling)
+11. [Contributing](#contributing)
+12. [License](#license)
 
 ---
 
@@ -33,6 +37,7 @@ A command-line tool that automatically translates source code between different 
 - **Detailed Logging**: Track translation progress
 - **Safety Features**: Overwrite protection and dry-run mode
 - **AI Integration**: Works with any Ollama-compatible model
+- **Configurable Extensions**: Customize file extensions through extensions.json
 
 ## Requirements
 
@@ -100,6 +105,62 @@ HTML, XML, CSS, JSON, YAML, Markdown, TOML, INI, CSV, SQL, GraphQL
 **Build Systems:**
 Dockerfile, Makefile, CMake
 
+## File Extensions Configuration
+
+### extensions.json
+
+CodeTranslator uses a configurable `extensions.json` file to map programming languages to their corresponding file extensions. This file is automatically created in your working directory when you first run the tool.
+
+**Key Features:**
+- **Auto-generation**: The file is created automatically with sensible defaults if it doesn't exist
+- **Case-insensitive**: Language names are matched case-insensitively
+- **Multiple extensions**: Each language can have multiple file extensions
+- **Customizable**: You can edit the file to add your own extensions or modify existing ones
+
+### Adding Custom Extensions
+
+To add support for additional file extensions or new languages:
+
+1. **Run the tool once** to generate the default `extensions.json` file
+2. **Edit the file** to add your custom mappings
+3. **Use your custom language names** in the `--source` and `--target` parameters
+
+### Example Configuration
+
+Here's a sample of what the `extensions.json` file looks like:
+
+```json
+{
+  "csharp": [".cs"],
+  "java": [".java"],
+  "python": [".py", ".pyw"],
+  "javascript": [".js", ".mjs", ".cjs"],
+  "typescript": [".ts", ".tsx"],
+  "cpp": [".cpp", ".cc", ".cxx"],
+  "lingo": [".ls"],
+  "shockwave": [".ls"]
+}
+```
+
+**Adding a new language:**
+```json
+{
+  "myCustomLang": [".mcl", ".custom"],
+  "assembly": [".asm", ".s"]
+}
+```
+
+**Multiple aliases for the same language:**
+```json
+{
+  "csharp": [".cs"],
+  "c#": [".cs"],
+  "cs": [".cs"]
+}
+```
+
+**Note**: After modifying `extensions.json`, the changes take effect immediately on the next run.
+
 ## Custom Prompts
 
 CodeTranslator supports custom prompt files to fine-tune translation behavior. Create a prompt file with one of these naming patterns:
@@ -158,6 +219,16 @@ CodeTranslator --directory ./code \
                --api-url http://remote-server:11434/api/generate
 ```
 
+### Working with custom extensions
+```bash
+# First run creates extensions.json with defaults
+CodeTranslator --directory ./my-code
+
+# Edit extensions.json to add your language mappings
+# Then use your custom language names:
+CodeTranslator --directory ./legacy-code --source Lingo --target JavaScript
+```
+
 ## Output Structure
 
 CodeTranslator preserves the directory structure of your input files:
@@ -168,6 +239,7 @@ input-directory/
 │   ├── Main.java
 │   └── utils/
 │       └── Helper.java
+├── extensions.json          # Auto-generated config file
 └── converted_CSharp/
     └── src/
         ├── Main.cs
