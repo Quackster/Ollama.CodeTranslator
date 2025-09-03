@@ -6,6 +6,7 @@ using System.Text.Json;
 using System.Net.Http;
 using System.Threading.Tasks;
 using System.Collections.Generic;
+using System.Text.RegularExpressions;
 
 namespace CodeTranslator.Ollama
 {
@@ -99,8 +100,17 @@ namespace CodeTranslator.Ollama
             }
 
             // Collect files
-            var extensions = GetSourceExtensions(sourceLang).ToList();
-            var files = extensions.SelectMany(ext => Directory.GetFiles(directory, $"*{ext}", SearchOption.AllDirectories)).Distinct().ToList();
+            var sourceFileExtensions = GetSourceExtensions(sourceLang).ToList();
+            var targetFileExtensions = GetSourceExtensions(targetLang).ToList();
+            var files = sourceFileExtensions.SelectMany(ext => Directory.GetFiles(directory, $"*{ext}", SearchOption.AllDirectories)).Distinct().ToList();
+
+            string ext = targetFileExtensions.First();
+
+            if (verbose)
+            {
+                Info("Source extension(s): " + string.Join(", ", sourceFileExtensions));
+                Info("Target extension: " + ext);
+            }
 
             Info($"Found {files.Count} '{sourceLang}' files in '{directory}'. Output: '{outputDir}'");
 
@@ -108,9 +118,10 @@ namespace CodeTranslator.Ollama
 
             foreach (var file in files)
             {
+
                 string relativePath = Path.GetRelativePath(directory, file);
                 string code = await File.ReadAllTextAsync(file);
-                string outFile = Path.Combine(outputDir, Path.ChangeExtension(relativePath, GetExtensionFor(targetLang)));
+                string outFile = Path.Combine(outputDir, Path.ChangeExtension(relativePath, ext));
 
                 Directory.CreateDirectory(Path.GetDirectoryName(outFile)!);
 
@@ -158,12 +169,22 @@ namespace CodeTranslator.Ollama
                     continue;
                 }
 
-                await File.WriteAllTextAsync(outFile, apiResult.Response, Encoding.UTF8);
+                await File.WriteAllTextAsync(outFile, HandleResponse(apiResult.Response), Encoding.UTF8);
                 Info($"[OK] {relativePath} → {Path.GetRelativePath(directory, outFile)}");
             }
 
             Info("All files processed.");
             return 0;
+        }
+
+        private static string? HandleResponse(string response)
+        {
+            try
+            {
+                return MarkdownCodeExtractor.ExtractShortCodeSnippet(response);
+            }
+            catch { return response; }
+
         }
 
         /// <summary>
@@ -265,58 +286,6 @@ Show me the source code only, full source code, and nothing but the source code.
             return dict;
         }
 
-        static string GetExtensionFor(string lang) => lang.ToLower() switch
-        {
-            "csharp" or "c#" => ".cs",
-            "vbnet" or "vb" => ".vb",
-            "fsharp" or "fs" or "f#" => ".fs",
-            "java" => ".java",
-            "kotlin" => ".kt",
-            "scala" => ".scala",
-            "groovy" => ".groovy",
-            "c" => ".c",
-            "cpp" or "c++" => ".cpp",
-            "objc" or "objective-c" => ".m",
-            "rust" => ".rs",
-            "go" => ".go",
-            "javascript" or "js" => ".js",
-            "typescript" or "ts" => ".ts",
-            "python" or "py" => ".py",
-            "ruby" or "rb" => ".rb",
-            "php" => ".php",
-            "perl" or "pl" => ".pl",
-            "dart" => ".dart",
-            "lua" => ".lua",
-            "coffeescript" or "coffee" => ".coffee",
-            "r" => ".r",
-            "shell" or "bash" => ".sh",
-            "powershell" => ".ps1",
-            "haskell" or "hs" => ".hs",
-            "clojure" or "clj" => ".clj",
-            "elixir" or "ex" => ".ex",
-            "erlang" or "erl" => ".erl",
-            "lisp" => ".lisp",
-            "scheme" => ".scm",
-            "html" => ".html",
-            "xml" => ".xml",
-            "css" => ".css",
-            "json" => ".json",
-            "yaml" or "yml" => ".yaml",
-            "markdown" or "md" => ".md",
-            "toml" => ".toml",
-            "ini" => ".ini",
-            "csv" => ".csv",
-            "sql" => ".sql",
-            "matlab" or "m" => ".m",
-            "racket" => ".rkt",
-            "elm" => ".elm",
-            "graphql" => ".graphql",
-            "dockerfile" => "Dockerfile",
-            "makefile" => "Makefile",
-            "cmake" => "CMakeLists.txt",
-            _ => ".txt"
-        };
-
         static IEnumerable<string> GetSourceExtensions(string lang) => lang.ToLower() switch
         {
             "csharp" or "c#" => new[] { ".cs" },
@@ -366,7 +335,30 @@ Show me the source code only, full source code, and nothing but the source code.
             "dockerfile" => new[] { "Dockerfile" },
             "makefile" => new[] { "Makefile" },
             "cmake" => new[] { "CMakeLists.txt" },
+            "lingo" or "shockwave" => new[] { ".ls" },
             _ => new[] { ".txt" }
         };
     }
+    public static class MarkdownCodeExtractor
+    {
+        public static string ExtractShortCodeSnippet(string markdown)
+        {
+            // Regex to match code fences: ```[optional language]\n(code)\n```
+            var regex = new Regex(@"```[\w]*\n(.*?)\n```", RegexOptions.Singleline);
+            var match = regex.Match(markdown);
+
+            if (match.Success)
+            {
+                string code = match.Groups[1].Value;
+                //if (code.Length < maxLength)
+                // {
+                //    return code;
+                //}
+
+                return code;
+            }
+            return markdown;
+        }
+    }
+
 }
