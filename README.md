@@ -44,21 +44,14 @@ A command-line tool that automatically translates source code between different 
 
 1. Clone the repository:
 ```bash
-git clone https://github.com/yourusername/CodeTranslator.git
-cd CodeTranslator
+git clone https://github.com/Quackster/Ollama.CodeTranslator.git
+cd Ollama.CodeTranslator
 ```
 
 2. Build the project:
 ```bash
 dotnet build -c Release
 ```
-
-3. (Optional) Create a global tool:
-```bash
-dotnet pack -c Release
-dotnet tool install --global --add-source ./bin/Release CodeTranslator
-```
-
 ## Usage
 
 ### Basic Usage
