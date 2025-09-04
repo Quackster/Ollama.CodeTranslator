@@ -67,9 +67,12 @@ namespace CodeTranslator.Ollama
             bool dryRun = options.ContainsKey("dry-run");
             var timeout = TimeSpan.FromMinutes(30);
 
-            if (int.TryParse(options["--timeout"], out var timeoutVal) && timeoutVal > 0)
+            if (options.ContainsKey("timeout"))
             {
-                timeout = TimeSpan.FromSeconds(timeoutVal);
+                if (int.TryParse(options["--timeout"], out var timeoutVal) && timeoutVal > 0)
+                {
+                    timeout = TimeSpan.FromSeconds(timeoutVal);
+                }
             }
 
             client.Timeout = timeout;
