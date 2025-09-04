@@ -72,7 +72,7 @@ namespace CodeTranslator.Ollama
             }
             var timeout = TimeSpan.FromMinutes(30);
 
-            if (options.ContainsKey("timeout"))
+            if (options.ContainsKey("--timeout"))
             {
                 if (int.TryParse(options["--timeout"], out var timeoutVal) && timeoutVal > 0)
                 {
