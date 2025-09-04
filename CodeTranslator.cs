@@ -65,6 +65,11 @@ namespace CodeTranslator.Ollama
             string promptOption = options.ContainsKey("prompt") ? options["prompt"] : null;
             bool overwrite = options.ContainsKey("overwrite");
             bool dryRun = options.ContainsKey("dry-run");
+            int ctx = 4096; // default
+            if (options.TryGetValue("ctx", out var ctxString) && int.TryParse(ctxString, out int userCtx) && userCtx > 0)
+            {
+                ctx = userCtx;
+            }
             var timeout = TimeSpan.FromMinutes(30);
 
             if (options.ContainsKey("timeout"))
@@ -153,7 +158,7 @@ namespace CodeTranslator.Ollama
                 OllamaResponse apiResult = null;
                 try
                 {
-                    apiResult = await TranslateAsync(model, prompt, apiUrl);
+                    apiResult = await TranslateAsync(model, prompt, apiUrl, ctx);
                 }
                 catch (Exception ex)
                 {
@@ -230,9 +235,9 @@ Show me the source code only, full source code, and nothing but the source code.
             return defaultPromptFilePath;
         }
 
-        static async Task<OllamaResponse> TranslateAsync(string model, string prompt, string apiUrl)
+        static async Task<OllamaResponse> TranslateAsync(string model, string prompt, string apiUrl, int ctx)
         {
-            var payload = new { model, prompt, stream = false };
+            var payload = new { model, prompt, stream = false, options = new { num_ctx = ctx } };
             string json = JsonSerializer.Serialize(payload);
             var resp = await client.PostAsync(apiUrl, new StringContent(json, Encoding.UTF8, "application/json"));
             resp.EnsureSuccessStatusCode();
