@@ -1,0 +1,8 @@
+{
+  "profiles": {
+    "CodeTranslator": {
+      "commandName": "Project",
+      "commandLineArgs": "--directory \"C:\\temp\\in\\prj_d\" --output \"C:\\temp\\out\\prj_d\" --verbose --source vb6 --target Java --model deepseek-coder-v2:16b --context 17536 --timeout 999999"
+    }
+  }
+}
