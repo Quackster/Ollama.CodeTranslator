@@ -410,7 +410,7 @@ Show me the source code only, full source code, and nothing but the source code.
             Console.WriteLine("  --source <lang>      Source language (default: Java)");
             Console.WriteLine("  --target <lang>      Target language (default: CSharp)");
             Console.WriteLine("  --model <name>       Ollama model (default: qwen2.5-coder:3b)");
-            Console.WriteLine("  --api-url <url>      API endpoint (default: http://localhost:11434/api/chat)");
+            Console.WriteLine("  --api-url <url>      API endpoint (default: http://localhost:11434/api/generate)");
             Console.WriteLine("  --output <dir>       Output directory (default: <input-dir>/converted_<target>)");
             Console.WriteLine("  --log <file>         Log file path");
             Console.WriteLine("  --prompt <file>      Custom prompt file");
@@ -572,7 +572,7 @@ Show me the source code only, full source code, and nothing but the source code.
                 SourceLang: dict.GetValueOrDefault("source", "Java"),
                 TargetLang: dict.GetValueOrDefault("target", "CSharp"),
                 Model: dict.GetValueOrDefault("model", "qwen2.5-coder:3b"),
-                ApiUrl: dict.GetValueOrDefault("api-url", "http://localhost:11434/api/chat"),
+                ApiUrl: dict.GetValueOrDefault("api-url", "http://localhost:11434/api/generate"),
                 OutputDir: dict.GetValueOrDefault("output"),
                 PromptFile: dict.GetValueOrDefault("prompt"),
                 LogPath: dict.GetValueOrDefault("log"),
